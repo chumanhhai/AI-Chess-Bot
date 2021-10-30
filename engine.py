@@ -2,6 +2,8 @@ import random
 
 
 class GameState:
+    INFINITY = 9999999
+
     def __init__(self):
         self.board = [["bR", "bN", "bB", "bQ", "bK", "bB", "bN", "bR"],
                       ["bP", "bP", "bP", "bP", "bP", "bP", "bP", "bP"],
@@ -30,7 +32,7 @@ class GameState:
             return random.choice(self.valid_moves)
         return None
 
-    def minimax(self, depth):
+    def minimax(self, depth, alpha, beta):
         if depth == self.depth: # terminate
             return None, self.state_score
         if self.whiteToMove:
@@ -38,34 +40,40 @@ class GameState:
                 return None, self.rank_score["bK"]
             if not self.check and not self.valid_moves: # if stalemate
                 return None, 0
-            max_score = -99999
+            max_score = -self.INFINITY
             saved_moves = []
             for move in self.valid_moves:
                 self.make_move(move, True, False)
-                _, score = self.minimax(depth+1)
+                _, score = self.minimax(depth+1, alpha, beta)
                 self.undo_move()
                 if max_score < score:
                     max_score = score
                     saved_moves = [move]
                 elif max_score == score:
                     saved_moves.append(move)
+                alpha = max(alpha, score)
+                if alpha >= beta:
+                    break
             return random.choice(saved_moves), max_score
         else:
             if self.check and not self.valid_moves: # if checkmate
                 return None, self.rank_score["wK"]
             if not self.check and not self.valid_moves: # if stalemate
                 return None, 0
-            min_score = 99999
+            min_score = self.INFINITY
             saved_moves = []
             for move in self.valid_moves:
                 self.make_move(move, True, False)
-                _, score = self.minimax(depth+1)
+                _, score = self.minimax(depth+1, alpha, beta)
                 self.undo_move()
                 if min_score > score:
                     min_score = score
                     saved_moves = [move]
-                else:
+                elif min_score == score:
                     saved_moves.append(move)
+                beta = min(beta, score)
+                if alpha >= beta:
+                    break
             return random.choice(saved_moves), min_score
 
     def switch_turn(self, real_move):
@@ -180,7 +188,7 @@ class GameState:
     def get_pawn_moves(self, r, c):
         moves = []
         if self.whiteToMove:
-            if r == 6 and self.board[4][c] == '--':
+            if r == 6 and self.board[4][c] == '--' and self.board[5][c] == '--':
                 moves.append(Move((r, c), (r-2, c), self.board))
             if r >= 1 and self.board[r-1][c] == '--':
                 moves.append(Move((r, c), (r-1, c), self.board))
@@ -189,7 +197,7 @@ class GameState:
             if c <= 6 and self.board[r-1][c+1][0] == 'b':
                 moves.append(Move((r, c), (r-1, c+1), self.board))
         else:
-            if r == 1 and self.board[3][c] == '--':
+            if r == 1 and self.board[3][c] == '--' and self.board[2][c] == '--':
                 moves.append(Move((r, c), (r+2, c), self.board))
             if r <= 6 and self.board[r+1][c] == '--':
                 moves.append(Move((r, c), (r+1, c), self.board))

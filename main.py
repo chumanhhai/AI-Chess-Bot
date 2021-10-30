@@ -77,7 +77,8 @@ def run(gs):
                         draw_state(gs)
                         p.display.flip()
                         if not gs.whiteToMove and not gs.ending: # bot turn
-                            move, score = gs.minimax(1)
+                            move, score = gs.minimax(0, -gs.INFINITY, gs.INFINITY)
+                            print("MAX SCORE: ", score)
                             gs.make_move(move)
                             draw_state(gs)
         Button.buttons.update()
