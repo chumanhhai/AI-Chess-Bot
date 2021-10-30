@@ -1,3 +1,6 @@
+import random
+
+
 class GameState:
     def __init__(self):
         self.board = [["bR", "bN", "bB", "bQ", "bK", "bB", "bN", "bR"],
@@ -8,25 +11,95 @@ class GameState:
                       ["--", "--", "--", "--", "--", "--", "--", "--"],
                       ["wP", "wP", "wP", "wP", "wP", "wP", "wP", "wP"],
                       ["wR", "wN", "wB", "wQ", "wK", "wB", "wN", "wR"]]
+        self.rank_score = {"wP": 10, "wN": 30, "wB": 30, "wR": 50, "wQ": 90, "wK": 10000,
+                           "bP": -10, "bN": -30, "bB": -30, "bR": -50, "bQ": -90, "bK": -10000, "--": 0}
+        self.state_score = 0
         self.whiteToMove = True
+        self.ending = False
         self.moveLog = []
         self.clickBuffer = None
         self.bK_pos = (0, 4)
         self.wK_pos = (7, 4)
         self.check = False
         self.pinned = []
+        self.depth = 3
         self.valid_moves = self.get_valid_moves()
 
-    def switch_turn(self):
+    def random_move(self):
+        if self.valid_moves:
+            return random.choice(self.valid_moves)
+        return None
+
+    def minimax(self, depth):
+        if depth == self.depth: # terminate
+            return None, self.state_score
+        if self.whiteToMove:
+            if self.check and not self.valid_moves: # if checkmate
+                return None, self.rank_score["bK"]
+            if not self.check and not self.valid_moves: # if stalemate
+                return None, 0
+            max_score = -99999
+            saved_moves = []
+            for move in self.valid_moves:
+                self.make_move(move, True, False)
+                _, score = self.minimax(depth+1)
+                self.undo_move()
+                if max_score < score:
+                    max_score = score
+                    saved_moves = [move]
+                elif max_score == score:
+                    saved_moves.append(move)
+            return random.choice(saved_moves), max_score
+        else:
+            if self.check and not self.valid_moves: # if checkmate
+                return None, self.rank_score["wK"]
+            if not self.check and not self.valid_moves: # if stalemate
+                return None, 0
+            min_score = 99999
+            saved_moves = []
+            for move in self.valid_moves:
+                self.make_move(move, True, False)
+                _, score = self.minimax(depth+1)
+                self.undo_move()
+                if min_score > score:
+                    min_score = score
+                    saved_moves = [move]
+                else:
+                    saved_moves.append(move)
+            return random.choice(saved_moves), min_score
+
+    def switch_turn(self, real_move):
         self.whiteToMove = not self.whiteToMove
         self.clickBuffer = None
-        self.valid_moves = self.get_valid_moves()
         self.check, self.pinned = self.is_check()
-        print(self.check, self.pinned)
+        self.valid_moves = self.get_valid_moves()
+        self.ending = False
+        if real_move:
+            print("current score: ", self.state_score)
+            if self.check and not self.valid_moves:
+                print("current state: checkmate")
+                self.ending = True
+            if not self.check and not self.valid_moves:
+                print("current state: stalemate")
+                self.ending = True
+            if self.check and self.valid_moves:
+                print("current state: check")
+            if not self.check and self.valid_moves:
+                print("current state: normal")
+            print("===========================================")
 
-    def make_move(self, move, is_switch_turn=True):
+    def make_move(self, move, is_switch_turn=True, real_move=True):
         self.board[move.start_pos[0]][move.start_pos[1]] = '--'
         self.board[move.end_pos[0]][move.end_pos[1]] = move.start_piece
+        # track the state score
+        self.state_score -= self.rank_score[move.end_piece]
+        # check if promotion
+        if move.is_promotion:
+            promoting_piece = move.start_piece[0] + 'Q'
+            self.board[move.end_pos[0]][move.end_pos[1]] = promoting_piece
+            # track the state score
+            self.state_score -= self.rank_score[move.start_piece]
+            self.state_score += self.rank_score[promoting_piece]
         # track the king pos
         if move.start_piece == 'wK':
             self.wK_pos = move.end_pos
@@ -34,8 +107,9 @@ class GameState:
             self.bK_pos = move.end_pos
         self.moveLog.append(move)
         if is_switch_turn:
-            print(move.get_notation())
-            self.switch_turn()
+            if real_move:
+                print(move.get_notation())
+            self.switch_turn(real_move)
 
     def undo_move(self, is_switch_turn=True):
         if not self.moveLog: # assure there is already some moves
@@ -43,28 +117,35 @@ class GameState:
         last_move = self.moveLog.pop()
         self.board[last_move.start_pos[0]][last_move.start_pos[1]] = last_move.start_piece
         self.board[last_move.end_pos[0]][last_move.end_pos[1]] = last_move.end_piece
+        # track the state score
+        self.state_score += self.rank_score[last_move.end_piece]
+        # check if promotion
+        if last_move.is_promotion:
+            promoting_piece = last_move.start_piece[0] + 'Q'
+            # track the state score
+            self.state_score += self.rank_score[last_move.start_piece]
+            self.state_score -= self.rank_score[promoting_piece]
         # track the king pos
         if last_move.start_piece == 'wK':
-            self.wK_pos = last_move.end_pos
+            self.wK_pos = last_move.start_pos
         if last_move.start_piece == 'bK':
-            self.bK_pos = last_move.end_pos
+            self.bK_pos = last_move.start_pos
         if is_switch_turn:
-            self.switch_turn()
+            self.switch_turn(False)
 
     def get_valid_moves(self):
         moves = []
         possible_moves = self.get_possible_moves()
         for move in possible_moves:
             if self.check: # if check
-                self.make_move(move, False) # try to make move and check if still in check state
+                self.make_move(move, False, False) # try to make move and check if still in check state
                 check, _ = self.is_check()
                 if not check:
                     moves.append(move)
                 self.undo_move(False)
             else: # if not check
-                # print(move.start_pos, self.pinned)
                 if (move.start_pos in self.pinned) or move.start_piece[1] == 'K': # if is pinned piece or king piece
-                    self.make_move(move, False)
+                    self.make_move(move, False, False)
                     check, _ = self.is_check()
                     if not check:
                         moves.append(move)
@@ -224,6 +305,7 @@ class GameState:
                 tem_c += y
         return False, pinned
 
+
 class Move:
     rowToSym = {0: '8', 1: '7', 2: '6', 3: '5', 4: '4', 5: '3', 6: '2', 7: '1'}
     colToSym = {0: 'a', 1: 'b', 2: 'c', 3: 'd', 4: 'e', 5: 'f', 6: 'g', 7: 'h'}
@@ -233,6 +315,9 @@ class Move:
         self.end_pos = end_pos
         self.start_piece = board[start_pos[0]][start_pos[1]]
         self.end_piece = board[end_pos[0]][end_pos[1]]
+        self.is_promotion = False
+        if (self.start_piece == 'wP' and end_pos[0] == 0) or (self.start_piece == 'bP' and end_pos[0] == 7):
+            self.is_promotion = True
 
     def __eq__(self, other):
         if not isinstance(other, Move):

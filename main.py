@@ -51,15 +51,15 @@ def run(gs):
         for e in p.event.get():
             if e.type == p.QUIT:
                 running = False
-            if e.type == p.MOUSEBUTTONDOWN:
+            if e.type == p.MOUSEBUTTONDOWN and not gs.ending:
                 location = p.mouse.get_pos()
                 row = int(location[1] // SQ_SIZE)
                 col = int(location[0] // SQ_SIZE)
                 if row >= DIMENSION or col >= DIMENSION: # if not click on board
                     continue
-                if not gs.clickBuffer: # if the first click
+                if gs.whiteToMove and not gs.clickBuffer: # if the first click
                     piece = gs.board[row][col]
-                    if piece == '--':
+                    if piece == '--' or piece[0] == 'b':
                         continue
                     if (piece[0] == 'w' and not gs.whiteToMove) or (piece[0] == 'b' and gs.whiteToMove): # not in turn
                         continue
@@ -74,6 +74,12 @@ def run(gs):
                     move = engine.Move(gs.clickBuffer, (row, col), gs.board)
                     if move in gs.valid_moves: # if valid move
                         gs.make_move(move)
+                        draw_state(gs)
+                        p.display.flip()
+                        if not gs.whiteToMove and not gs.ending: # bot turn
+                            move, score = gs.minimax(1)
+                            gs.make_move(move)
+                            draw_state(gs)
         Button.buttons.update()
         clock.tick(MAX_FPS)
         draw_state(gs)
