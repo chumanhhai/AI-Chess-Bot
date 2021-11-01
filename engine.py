@@ -1,3 +1,4 @@
+import copy
 import random
 
 
@@ -15,6 +16,7 @@ class GameState:
                       ["wR", "wN", "wB", "wQ", "wK", "wB", "wN", "wR"]]
         self.rank_score = {"wP": 10, "wN": 30, "wB": 30, "wR": 50, "wQ": 90, "wK": 10000,
                            "bP": -10, "bN": -30, "bB": -30, "bR": -50, "bQ": -90, "bK": -10000, "--": 0}
+        self.checkmate_score = 10000
         self.state_score = 0
         self.whiteToMove = True
         self.ending = False
@@ -33,55 +35,71 @@ class GameState:
         return None
 
     def minimax(self, depth, alpha, beta):
-        if depth == self.depth: # terminate
-            return None, self.state_score
         if self.whiteToMove:
             if self.check and not self.valid_moves: # if checkmate
-                return None, self.rank_score["bK"]
+                return None, -self.checkmate_score
             if not self.check and not self.valid_moves: # if stalemate
                 return None, 0
+            if depth == self.depth: # terminate
+                return None, self.state_score
             max_score = -self.INFINITY
             saved_moves = []
-            for move in self.valid_moves:
-                self.make_move(move, True, False)
+            valid_moves = copy.deepcopy(self.valid_moves)
+            for move in valid_moves:
+                self.make_move(move, True, False, True)
                 _, score = self.minimax(depth+1, alpha, beta)
-                self.undo_move()
+                self.undo_move(True, False)
                 if max_score < score:
                     max_score = score
                     saved_moves = [move]
                 elif max_score == score:
                     saved_moves.append(move)
                 alpha = max(alpha, score)
-                if alpha >= beta:
+                if alpha > beta:
                     break
             return random.choice(saved_moves), max_score
         else:
             if self.check and not self.valid_moves: # if checkmate
-                return None, self.rank_score["wK"]
+                return None, self.checkmate_score
             if not self.check and not self.valid_moves: # if stalemate
                 return None, 0
+            if depth == self.depth: # terminate
+                return None, self.state_score
             min_score = self.INFINITY
             saved_moves = []
-            for move in self.valid_moves:
-                self.make_move(move, True, False)
+            priority_moves = []
+            valid_moves = copy.deepcopy(self.valid_moves)
+            for move in valid_moves:
+                self.make_move(move, True, False, True)
+                curr_score = self.state_score
                 _, score = self.minimax(depth+1, alpha, beta)
-                self.undo_move()
+                self.undo_move(True, False)
                 if min_score > score:
                     min_score = score
                     saved_moves = [move]
+                    if min_score == curr_score:
+                        priority_moves = [move]
+                    else:
+                        priority_moves = []
                 elif min_score == score:
                     saved_moves.append(move)
+                    if min_score == curr_score:
+                        priority_moves.append(move)
                 beta = min(beta, score)
-                if alpha >= beta:
+                if alpha > beta:
                     break
-            return random.choice(saved_moves), min_score
+            if priority_moves:
+                return random.choice(priority_moves), min_score
+            else:
+                return random.choice(saved_moves), min_score
 
-    def switch_turn(self, real_move):
+    def switch_turn(self, real_move=True, should_get_moves=True):
         self.whiteToMove = not self.whiteToMove
         self.clickBuffer = None
-        self.check, self.pinned = self.is_check()
-        self.valid_moves = self.get_valid_moves()
         self.ending = False
+        if should_get_moves:
+            self.check, self.pinned = self.is_check()
+            self.valid_moves = self.get_valid_moves()
         if real_move:
             print("current score: ", self.state_score)
             if self.check and not self.valid_moves:
@@ -96,7 +114,7 @@ class GameState:
                 print("current state: normal")
             print("===========================================")
 
-    def make_move(self, move, is_switch_turn=True, real_move=True):
+    def make_move(self, move, is_switch_turn=True, real_move=True, should_get_moves=True):
         self.board[move.start_pos[0]][move.start_pos[1]] = '--'
         self.board[move.end_pos[0]][move.end_pos[1]] = move.start_piece
         # track the state score
@@ -117,9 +135,9 @@ class GameState:
         if is_switch_turn:
             if real_move:
                 print(move.get_notation())
-            self.switch_turn(real_move)
+            self.switch_turn(real_move, should_get_moves)
 
-    def undo_move(self, is_switch_turn=True):
+    def undo_move(self, is_switch_turn=True, should_get_moves=True):
         if not self.moveLog: # assure there is already some moves
             return
         last_move = self.moveLog.pop()
@@ -139,21 +157,23 @@ class GameState:
         if last_move.start_piece == 'bK':
             self.bK_pos = last_move.start_pos
         if is_switch_turn:
-            self.switch_turn(False)
+            if should_get_moves: # trigger when click on undo button
+                self.depth = 3
+            self.switch_turn(False, should_get_moves)
 
     def get_valid_moves(self):
         moves = []
         possible_moves = self.get_possible_moves()
         for move in possible_moves:
             if self.check: # if check
-                self.make_move(move, False, False) # try to make move and check if still in check state
+                self.make_move(move, False) # try to make move and check if still in check state
                 check, _ = self.is_check()
                 if not check:
                     moves.append(move)
                 self.undo_move(False)
             else: # if not check
                 if (move.start_pos in self.pinned) or move.start_piece[1] == 'K': # if is pinned piece or king piece
-                    self.make_move(move, False, False)
+                    self.make_move(move, False)
                     check, _ = self.is_check()
                     if not check:
                         moves.append(move)
@@ -295,6 +315,7 @@ class GameState:
             tem_r = r + x
             tem_c = c + y
             possible_pin = None
+            count = 1
             while 0 <= tem_r < 8 and 0 <= tem_c < 8:
                 piece = self.board[tem_r][tem_c]
                 if self.is_ally(piece[0]): # if ally
@@ -303,7 +324,8 @@ class GameState:
                     else: # if the second time meet ally
                         break
                 elif self.is_enemy(piece[0]): # if enemy
-                    if (0 <= i < 4 and piece[1] == 'R') or (4 <= i < 8 and piece[1] == 'B') or piece[1] == 'Q':
+                    if (0 <= i < 4 and piece[1] == 'R') or (4 <= i < 8 and piece[1] == 'B') or piece[1] == 'Q' \
+                            or (count == 1 and piece[1] == 'K'):
                         if not possible_pin: # if check
                             return True, None
                         else: # if there is a pinned ally
@@ -311,6 +333,7 @@ class GameState:
                     break
                 tem_r += x
                 tem_c += y
+                count += 1
         return False, pinned
 
 

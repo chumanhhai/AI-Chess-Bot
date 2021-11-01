@@ -40,8 +40,13 @@ def draw_control_elements(gs):
 
     # btn reset
     btn_undo = Button.Button(screen, (BOARD_WIDTH + 75, 400), "Undo", 24, "black on white")
-    btn_undo.command = lambda: gs.undo_move()
+    btn_undo.command = lambda: did_tap_reset_btn(gs)
     btn_undo.draw_button1()
+
+
+def did_tap_reset_btn(gs):
+    gs.undo_move()
+    gs.undo_move()
 
 
 def run(gs):
@@ -78,6 +83,8 @@ def run(gs):
                         p.display.flip()
                         if not gs.whiteToMove and not gs.ending: # bot turn
                             move, score = gs.minimax(0, -gs.INFINITY, gs.INFINITY)
+                            if score == -gs.checkmate_score:
+                                gs.depth = 1
                             print("MAX SCORE: ", score)
                             gs.make_move(move)
                             draw_state(gs)
