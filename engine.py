@@ -14,10 +14,19 @@ class GameState:
                       ["--", "--", "--", "--", "--", "--", "--", "--"],
                       ["wP", "wP", "wP", "wP", "wP", "wP", "wP", "wP"],
                       ["wR", "wN", "wB", "wQ", "wK", "wB", "wN", "wR"]]
+        # self.board = [["bR", "bN", "bB", "bQ", "bK", "wQ", "bN", "bR"],
+        #               ["bP", "bP", "bP", "bP", "bP", "--", "bP", "bP"],
+        #               ["--", "--", "--", "--", "--", "--", "--", "--"],
+        #               ["--", "--", "--", "--", "--", "--", "--", "--"],
+        #               ["--", "--", "--", "--", "--", "--", "--", "--"],
+        #               ["--", "--", "--", "--", "--", "--", "--", "--"],
+        #               ["wP", "wP", "wP", "wP", "wP", "wR", "wP", "wP"],
+        #               ["wR", "wN", "wB", "wQ", "wK", "wB", "wN", "wR"]]
         self.rank_score = {"wP": 10, "wN": 30, "wB": 30, "wR": 50, "wQ": 90, "wK": 10000,
                            "bP": -10, "bN": -30, "bB": -30, "bR": -50, "bQ": -90, "bK": -10000, "--": 0}
         self.checkmate_score = 10000
         self.state_score = 0
+        self.result = ""
         self.whiteToMove = True
         self.ending = False
         self.moveLog = []
@@ -105,13 +114,20 @@ class GameState:
             if self.check and not self.valid_moves:
                 print("current state: checkmate")
                 self.ending = True
+                if self.whiteToMove:
+                    self.result = "AI BOT Wins !"
+                else:
+                    self.result = "You Win !"
             if not self.check and not self.valid_moves:
                 print("current state: stalemate")
                 self.ending = True
+                self.result = "Stalemate!"
             if self.check and self.valid_moves:
                 print("current state: check")
+                self.result = "Check !"
             if not self.check and self.valid_moves:
                 print("current state: normal")
+                self.result = ""
             print("===========================================")
 
     def make_move(self, move, is_switch_turn=True, real_move=True, should_get_moves=True):
